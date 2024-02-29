@@ -8,7 +8,7 @@ from flask_swagger import swagger
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
-from models import db, Users
+from models import db, Users, Characters, Planets, FavoriteCharacters, FavoritePlanets
 
 # Instancias Flask
 app = Flask(__name__)
@@ -46,21 +46,32 @@ def handle_hello():
     return jsonify(response_body), 200
 
 
-@app.route('/users', methods=['GET','POST'])
+@app.route('/users2', methods=['GET','POST'])
 def handle_users():
-    response_body= results = {}
+    response_body= {}
+    results = []
     if request.method=='GET':
         #Lçogica para consultar la DB y devolver todos los usuarios 
-        users = db.session.execute(db.select(Users)).scalars()
-        response_body['results']=[row.serialize() for row in users]
-        response_body[ "message"] = 'Metodo Get de users'
-        return jsonify(response_body), 200
+        users = db.session.execute(db.select(Users, FavoriteCharacters, FavoritePlanets)
+                            .join(FavoriteCharacters, Users.id==FavoriteCharacters.user_id, isouter=True)
+                            .join(FavoritePlanets,   Users.id==FavoritePlanets.user_id,isouter=True))
+        #response_body['results']=[row.serialize() for row in users]
+        #response_body[ "message"] = 'Metodo Get de users'
+        if users:
+            for row in users:
+                users, favoriteCharacters, favorite_Planets = row 
+                data = users.serialize()
+                data["profile"]= favoriteCharacters.serialize()
+                results.append(data)
+            response_body["results"] = results
+            return response_body, 200
     if request.method == 'POST':
         #Debo recibír el body desde el front
         data = request.json
         #Creando una instancia de la clase Users
         user = Users(email=data['email'],
-                     password=data['password'], 
+                     password=data['password'],
+                     first_name=data['first_name'],
                      is_active=True)
         db.session.add(user)
         db.session.commit()
@@ -83,6 +94,57 @@ def handle_user(id):
         response_body['message']= 'metodo DELETE del users/<id>'
         return response_body,200
 
+@app.route('/characters', methods=['GET'])
+def handle_characters():
+    response_body= {}
+    results = []
+    characters = db.session.execute(db.select(Characters)).scalars()
+    if characters:
+            for row in characters:
+                data = row.serialize()
+                results.append(data)
+            response_body["results"] = results
+            response_body["message"] = "characters list: "
+            return response_body, 200
+    response_body["message"] = "No hay characters"
+    return response_body, 400
+
+@app.route('/planets', methods=['GET'])
+def handle_planets():
+    response_body= {}
+    results = []
+    planets = db.session.execute(db.select(Planets)).scalars()
+    if planets:
+            for row in planets:
+                data = row.serialize()
+                results.append(data)
+            response_body["results"] = results
+            response_body["message"] = "characters list: "
+            return response_body, 200
+    response_body["message"] = "No hay characters"
+    return response_body, 400
+
+@app.route('/favorites/<int:user_id>/planets', methods=['POST'])
+def add_favorite_planets(user_id):
+    response_body = {}
+    data = request.json   
+    # toma una instancia del modelo: FavoritePlanets 
+    favorite = FavoritePlanets(user_id = user_id, planets_id = data["planet_id"])  
+    response_body["message"]= "Responde el POST"
+    db.session.add(favorite)
+    db.session.commit()
+    return response_body
+
+@app.route('/favorites/<int:user_id>/characters', methods=['POST'])
+def add_favorite_characters(user_id):
+    response_body = {}
+    data = request.json   
+    # toma una instancia del modelo: FavoritePlanets 
+    favorite = FavoriteCharacters(user_id = user_id, characters_id = data["character_id"])
+    response_body["message"]= "Responde el POST"
+    db.session.add(favorite)
+    db.session.commit()
+    return response_body
 
 
 # This only runs if `$ python src/app.py` is executed
