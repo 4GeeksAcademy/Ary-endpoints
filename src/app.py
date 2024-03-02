@@ -45,54 +45,46 @@ def handle_hello():
     response_body = {"message": "Hello, this is your GET /user response "}
     return jsonify(response_body), 200
 
+@app.route('/users', methods=['GET'])
+def handle_user():
+    response_body= {}
+    results = []
+    users = db.session.execute(db.select(Users)).scalars()
+    if users:
+            for row in users:
+                data = row.serialize()
+                results.append(data)
+            response_body["results"] = results
+            response_body["message"] = "characters list: "
+            return response_body, 200
+    response_body["message"] = "No hay characters"
+    return response_body, 400
 
-@app.route('/users2', methods=['GET','POST'])
-def handle_users():
+@app.route('/users/<int:user_id>/favorites', methods=['GET'])
+def handle_users_favorites(user_id):
     response_body= {}
     results = []
     if request.method=='GET':
         #Lçogica para consultar la DB y devolver todos los usuarios 
         users = db.session.execute(db.select(Users, FavoriteCharacters, FavoritePlanets)
                             .join(FavoriteCharacters, Users.id==FavoriteCharacters.user_id, isouter=True)
-                            .join(FavoritePlanets,   Users.id==FavoritePlanets.user_id,isouter=True))
+                            .join(FavoritePlanets,   Users.id==FavoritePlanets.user_id,isouter=True)
+                            .where(Users.id==user_id))
         #response_body['results']=[row.serialize() for row in users]
         #response_body[ "message"] = 'Metodo Get de users'
         if users:
             for row in users:
-                users, favoriteCharacters, favorite_Planets = row 
-                data = users.serialize()
-                data["profile"]= favoriteCharacters.serialize()
+                user, favoriteCharacter, favorite_Planet = row 
+                data = user.serialize()
+                if favoriteCharacter:
+                    data["Characters"]= favoriteCharacter.serialize()
+                if favorite_Planet:
+                    data["Planets"]= favorite_Planet.serialize()
                 results.append(data)
             response_body["results"] = results
             return response_body, 200
-    if request.method == 'POST':
-        #Debo recibír el body desde el front
-        data = request.json
-        #Creando una instancia de la clase Users
-        user = Users(email=data['email'],
-                     password=data['password'],
-                     first_name=data['first_name'],
-                     is_active=True)
-        db.session.add(user)
-        db.session.commit()
-        response_body['results'] = user.serialize()
-        response_body[ "message"] = 'Metodo Post de users'
-        return response_body, 200
 
 
-@app.route('/users/<int:id>', methods=['GET','PUT','DELETE'])
-def handle_user(id):
-    response_body ={}
-    print(id)
-    if request.method == 'GET':
-        response_body['message']= 'metodo GET del users/<id>'
-        return response_body,200
-    if request.method == 'PUT':
-        response_body['message']= 'metodo PUT del users/<id>'
-        return response_body,200
-    if request.method == 'DELETE':
-        response_body['message']= 'metodo DELETE del users/<id>'
-        return response_body,200
 
 @app.route('/characters', methods=['GET'])
 def handle_characters():
@@ -109,6 +101,15 @@ def handle_characters():
     response_body["message"] = "No hay characters"
     return response_body, 400
 
+@app.route('/characters/<int:character_id>', methods=['GET'])
+def handle_character_id(character_id):
+    response_body= {}
+    #character = db.session.execute(db.select(Characters).where(Characters.id==character_id)).scalar()
+    character = db.session.get(Characters,character_id)
+    response_body["results"] = character.serialize()
+    response_body["message"] = "Bien hecho"
+    return response_body, 200
+
 @app.route('/planets', methods=['GET'])
 def handle_planets():
     response_body= {}
@@ -123,6 +124,15 @@ def handle_planets():
             return response_body, 200
     response_body["message"] = "No hay characters"
     return response_body, 400
+
+@app.route('/planets/<int:planets_id>', methods=['GET'])
+def handle_planet_id(planets_id):
+    response_body= {}
+    planet = db.session.execute(db.select(Planets).where(Planets.id==planets_id)).scalar()
+    response_body["results"] = planet.serialize()
+    response_body["message"] = "Bien hecho"
+    return response_body, 200
+
 
 @app.route('/favorites/<int:user_id>/planets', methods=['POST'])
 def add_favorite_planets(user_id):
@@ -146,6 +156,36 @@ def add_favorite_characters(user_id):
     db.session.commit()
     return response_body
 
+@app.route('/favorites/<int:user_id>/characters/<int:character_id>', methods=['DELETE'])
+def delete_favorite_characters(user_id,character_id):
+    response_body = {}  
+    # toma una instancia del modelo: FavoritePlanets 
+    favorite = FavoriteCharacters.query.filter_by(user_id=user_id, characters_id=character_id).first()
+    response_body["message"]= "Responde el Delete" 
+    response_body["result"]= favorite
+    db.session.delete(favorite)
+    db.session.commit()
+    return response_body
+
+@app.route('/favorites/<int:user_id>/planets/<int:planet_id>', methods=['GET','DELETE'])
+def delete_favorite_planets(user_id,planet_id):
+    response_body = {}  
+    # toma una instancia del modelo: FavoritePlanets 
+    favorite = FavoritePlanets.query.filter_by(user_id=user_id, planets_id=planet_id).first()
+    if favorite:
+        if request.method == 'DELETE':
+            response_body["message"]= "Responde el Delete" 
+            response_body["result"]= favorite.serialize()
+            db.session.delete(favorite)
+            db.session.commit()
+            return response_body
+        if request.method == 'GET':
+            response_body["message"]="GET"
+            response_body["result"] = favorite.serialize()
+            return response_body
+    else:
+        response_body["message"] = "NONE"
+        return response_body, 400
 
 # This only runs if `$ python src/app.py` is executed
 if __name__ == '__main__':

@@ -75,4 +75,4 @@ class FavoritePlanets(db.Model):
         # Do not serialize the password, its a security breach
         return {"id": self.id,
                  "user_id": self.user_id,
-                 " planets_id": self.planets_id}
+                 "planets_id": self.planets_id}
